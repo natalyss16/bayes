@@ -1,15 +1,15 @@
 v1 <- c(1:5, T)
 v1*1
 
-dat[1,] # first row
-dat[,1] # first column
-dat[,1] + 2 # add 2 to each value
-dat[c(1,2), c(1,2)] # select a11, a12, a21, a22
+dat[1, ] # first row
+dat[, 1] # first column
+dat[, 1] + 2 # add 2 to each value
+dat[c(1, 2), c(1, 2)] # select a11, a12, a21, a22
 dat$X # by column name
 
 fn1 <- function(INPUT) {
     x <- INPUT + 1
-    return x
+    return x # nolint: error.
 }
 
 fn1(5)
@@ -77,3 +77,4 @@ ggplot(data, mapping = aes(x=value, y = value_2, color = group)) +
     xlim(-5,7.5) +
     ylim(-8,8) +
     labs(title = "Distribution of Group 1 to Group 2")
+
