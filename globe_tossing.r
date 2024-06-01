@@ -122,3 +122,64 @@ sd(sample)
 mode(sample)
 quantile(sample, probs = .10)
 quantile(sample, probs = .90)
+
+# prior distribution
+
+a <- 2.5
+b <- 6
+
+theta <- seq(0, 1, by = 0.01)
+prior <- dbeta(theta, a, b)
+plot(x, prior)
+
+summary <- data.frame(theta, prior)
+
+ggplot(summary, aes(x = theta, y = prior)) +
+  geom_line(linetype = "dotted")
+
+prior_sample <- data.frame(smp = sample(prior, 1000, replace=TRUE))
+# summary_sample <- data.frame(x, prior_sample)
+
+ggplot(summary) +
+  geom_line(linetype = "dotted",  color = "#ff02ff", aes(x = theta, y = prior)) +
+  geom_density(data = prior_sample, aes(x = smp), color = "green", size = 1)
+
+# solution
+
+# prior distribution
+
+a <- 2
+b <- 5
+
+theta <- seq(0,1, length.out = 1000) # 1000 values
+d <- dbeta(theta, shape1 = a, shape2 = b)
+summary <- data.frame(theta, d)
+
+ggplot(summary, aes(x = theta, y = d)) +
+  geom_line(size = 1, linetype = "dashed", color = "#ff02ff" ) +
+  labs(x = expression(theta), 
+       y = "Density")
+
+# sample from prior
+no <- 1000
+prior_smp <- data.frame(smp = rbeta(no, a, b)) 
+prior_smp
+
+ggplot(summary) +
+  geom_line(size = 1, linetype = "dashed",  color = "#ff02ff", aes(x = theta, y = d)) +
+  geom_density(data = prior_smp, aes(x = smp), color = "green", size = 1) + 
+  labs(x = expression(theta), 
+       y = "Density")
+
+preds <- data.frame(L =vector("numeric", nrow(prior_smp))) # empty df
+N <- 1000
+set.seed(832)
+ # take a next value, make prediction, store it, next value
+for (i in seq_along(prior_smp$smp)){ 
+  preds[i, "L"] <- rbinom(n = 1, size = N, prob = prior_smp[i, "smp"]) # binomial process
+}
+ggplot(preds, aes(x=L)) + 
+geom_histogram(fill = "green", color = "green", alpha = .5, bins = 100) + 
+scale_x_continuous(limits = c(0,N), breaks = seq(0,N,100)) + 
+labs(x = "Number of Simulated L out of 1000", y = "Frequency") 
+
