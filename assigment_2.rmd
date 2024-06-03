@@ -21,7 +21,7 @@ knitr::opts_chunk$set(tidy = TRUE, tidy.opts=list(width.cutoff=50))
 
 \newpage
   
-```{r}
+```{r, warning=FALSE, message=FALSE}
 library(stats)
 library(dplyr)
 ```
@@ -52,7 +52,9 @@ freq_B <- 2 # B is twice as likely to receive reviews
 Show that the posterior probability that Company A was rated is $\approx$ 0.29.
 
 To calculate prior probability for company A, we need to use the knowledge that company B is twice likely to obtain reviews than others.
+$$
 prior_A + prior_B (= 2 * prior_A) + prior_C = 1 => prior_A = 1/4
+$$
 
 ```{r}
 # priors for each company
@@ -110,19 +112,55 @@ The change is 0.3296651 which is approximately 33 percentage points.
 
 For tasks 2.1 and 2.2, suppose there are Factory A and Factory B, producing the same product.
 The company C receives equally many shipments from both factories. 
-Even though the machines, processes, and standards are virtually identical, the factories differ in
-their defect rates. 
+Even though the machines, processes, and standards are virtually identical, the factories differ in their defect rates. 
 Shipments from Factory A entail defective products 10% of the time, shipments from Factory B entail defective products 20% of the time.
+
+```{r}
+defect_A <- 0.1
+defect_B <- 0.2
+
+# probability of getting shipment from each factory is the same, so:
+prior_A <- 0.5
+prior_B <- 0.5
+```
 
 ## Task 2.1
 
 You receive a shipment from one of the factories, and upon inspection, you find that the shipment contains defective products.
 Compute the probability that the next shipment from this company will also contain defective products.
 
+First we need to compute conditional probability of getting defective products from both factories - these will be our priors
+
+$$
+P(A | defect) = P(defect | A) * P(A) / P(defect)
+$$
+$$
+P(B | defect) = P(defect | B) * P(B) / P(defect)
+$$
+
 ```{r}
-# write code here
+# total probability of getting defective product
+p_defect <- defect_A * prior_A + defect_B * prior_B
+
+# probability of getting defective product from company A
+p_A_defect <- defect_A * prior_A / p_defect
+
+# probability of getting defective product from company B
+p_B_defect <- defect_B * prior_B / p_defect
 ```
 
+Now we'll use $p_A_defect = 0.3(3)$ and $p_B_defect = 0.6(6)$ as priors to calculate probability of obtaining defective products in the next shipment
+
+```{r}
+# probabilities are already normalized so we don't need to divide them by total
+
+p_A_defect_next <- defect_A * p_A_defect
+p_B_defect_next <- defect_B * p_B_defect
+
+# probabilities are independent, so we can sum them up to obtain total
+p_defect_next <- p_A_defect_next + p_B_defect_next
+p_defect_next
+```
 
 ## Task 2.2
 
