@@ -102,7 +102,8 @@ companies_1 <- data.frame(
 )
 
 posterior_1 <- posterior(companies_1, pos_1, n_0)
-filter(posterior_1, company == "C")$posterior_norm - filter(posterior_0, company == "C")$posterior_norm
+filter(posterior_1, company == "C")$posterior_norm - 
+  filter(posterior_0, company == "C")$posterior_norm
 ```
 
 The change is 0.3296651 which is approximately 33 percentage points.
@@ -274,10 +275,19 @@ posterior_globe <- function(data_post, land, n) {
 posterior <- posterior_globe(poss, land, num_tosses)
 
 set.seed(70)
-posterior_sample <- data.frame(sample = sample(posterior$prop_L, size = 1000, replace = TRUE, prob = posterior$post))
+posterior_sample <- data.frame(sample = sample(
+  posterior$prop_L, 
+  size = 1000, 
+  replace = TRUE, 
+  prob = posterior$post)
+)
 
 num_outcomes <- 100
-predictions <- data.frame(count = rbinom(n = num_outcomes, size = num_outcomes, prob = posterior_sample$sample))
+predictions <- data.frame(count = rbinom(
+  n = num_outcomes, 
+  size = num_outcomes, 
+  prob = posterior_sample$sample)
+)
 
 predictions %>% ggplot(aes(x = count)) +
   geom_histogram(fill = "#d6d444", color = "black", alpha = .5, bins = 100) +
