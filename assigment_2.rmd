@@ -24,6 +24,7 @@ knitr::opts_chunk$set(tidy = TRUE, tidy.opts=list(width.cutoff=50))
 ```{r, warning=FALSE, message=FALSE}
 library(stats)
 library(dplyr)
+library(ggplot2)
 ```
 
 
@@ -150,7 +151,7 @@ p_A_defect <- defect_A * prior_A / p_defect
 p_B_defect <- defect_B * prior_B / p_defect
 ```
 
-Now we'll use $p_A_defect = 0.3(3)$ and $p_B_defect = 0.6(6)$ as priors to calculate probability of obtaining defective products in the next shipment
+Now we'll use p_A_defect = 0.3(3) and p_B_defect = 0.6(6) as priors to calculate probability of obtaining defective products in the next shipment
 
 ```{r}
 # probabilities are already normalized so we don't need to divide them by total
@@ -180,12 +181,12 @@ This is the information you have about the algorithm:
 When applying the the algorithm to the shipped products, the test is positive for Factory A.
 Including the defect data from 2.1, compute the posterior probability that your shipment is from Company A. 
 
-Our prior is $p_A_defect = 0.3(3)$ as it's the probability that defective product comes from company A
+Our prior is p_A_defect = 0.3(3) as it's the probability that defective product comes from company A
 Likelihood is 93%, as it shows the probability that algorithm is right given that it is actually from A
 
 To compute marginal likelihood, we need to take probability that algorithm detected A
 This happens in 93% cases when it's actually from A and in 13% when it wrongly detected it as B
-Therefore, marginal likelihood is $0.93 * p_A_defect + 0.13 * p_B_defect$
+Therefore, marginal likelihood is 0.93 * p_A_defect + 0.13 * p_B_defect
 
 ```{r}
 ident_A <- 0.93
@@ -213,10 +214,30 @@ For Task 3.1 and 3.2, suppose, one last time, you want to estimate the proportio
 Specify a prior distribution and store 10,000 random samples from it in a vector `sample`.
 Plot the prior distribution and briefly explain your choice of the prior.
 
-```{r}
+We want to estimate a proportion, therefore it is a good idea to choose beta-distribution
+To select a and b parameters I played a bit, looks like these are pretty adequate :)
 
+```{r, warning=FALSE}
+a <- 4
+b <- 8
+
+theta <- seq(0, 1, length.out = 1000) # 1000 values
+d <- dbeta(theta, shape1 = a, shape2 = b)
+summary <- data.frame(theta, d)
+
+# sample from prior
+set.seed(70)
+n <- 10000
+prior_sample <- data.frame(sample = rbeta(n, a, b))
+
+ggplot(summary) +
+  geom_density(data = prior_sample, aes(x = sample), color = "#57afc1", size = 1) +
+  theme_minimal() +
+  labs(
+    title = "Prior distribution of land proportion",
+    x = "Proportion of land",
+    y = "Density")
 ```
-
 
 
 ## Task 3.2 
@@ -225,20 +246,46 @@ Run the following code chunk that uses your object sample to obtain prior probab
 for the possible proportions of land 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1 that
 approximate your prior distribution. 
 
-```{r eval=FALSE, echo=TRUE}
+```{r}
 prop <- seq(0, 1, length.out = 12)
 priors <- vector("numeric", length(prop))
 for (i in seq_along(prop)){
-priors[i] <- round( sum(sample >= prop[i] & sample < prop[i+1]) / 1e4 , 2)
+  priors[i] <- round(sum(prior_sample >= prop[i] & prior_sample < prop[i+1]) / 1e4, 2)
 }
-poss <- tibble(prop_L = seq(0, 1, .1),
-prior = priors[1:11])
+poss <- data.frame(prop_L = seq(0, 1, .1), prior = priors[1:11])
 ```
 
 Use these priors to compute the posterior probability after observing 26 times land in 100 globe tosses.
 Take 1,000 samples from the posterior distribution and with each sample, predict the outcome of 100 globe tosses.
 Plot the posterior predictions in a histogram.
 
-```{r}
-#write code here
+```{r, warning=FALSE}
+num_tosses <- 100
+land <- 26
+
+# posterior function
+posterior_globe <- function(data_post, land, n) {
+  likelihood <- dbinom(land, size = n, prob = data_post$prop_L)
+  posterior <- likelihood * data_post$prior
+  posterior_norm <- posterior / sum(posterior) # normalization
+  data.frame(data_post, lh = round(likelihood, 3), post = round(posterior_norm, 3))
+}
+
+posterior <- posterior_globe(poss, land, num_tosses)
+
+set.seed(70)
+posterior_sample <- data.frame(sample = sample(posterior$prop_L, size = 1000, replace = TRUE, prob = posterior$post))
+
+num_outcomes <- 100
+predictions <- data.frame(count = rbinom(n = num_outcomes, size = num_outcomes, prob = posterior_sample$sample))
+
+predictions %>% ggplot(aes(x = count)) +
+  geom_histogram(fill = "#d6d444", color = "black", alpha = .5, bins = 100) +
+  scale_x_continuous(limits = c(0, num_outcomes), breaks = seq(0, num_outcomes, 10)) +
+  labs(
+    title = "Posterior predictions of land count",
+    x = "Number of simulated L out of 100",
+    y = "Frequency"
+  )
 ```
+
