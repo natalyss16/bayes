@@ -89,3 +89,11 @@ precis(m2_shaq)
 
 plot(m2_shaq)
 pairs(m2_shaq, pars = c("a", "b_1", "b_2", "sd"))
+
+# we recommend running this is a fresh R session or restarting your current session
+install.packages("cmdstanr", repos = c("https://stan-dev.r-universe.dev", getOption("repos")))
+
+cmdstanr::install_cmdstan()
+
+install.packages(c("coda","mvtnorm","devtools","loo","dagitty","shape"))
+devtools::install_github("rmcelreath/rethinking")
