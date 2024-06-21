@@ -1,0 +1,214 @@
+---
+title: "Assignment 1"
+author: "Natali Tckvitishvili"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+  
+```{r, echo = T, results = 'hide', warning=FALSE, message=FALSE}
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(stringi)
+```
+
+
+# Task Set 1
+
+For tasks 1.1-1.3, assume you throw 3 dice -- normal dice with 6 sides each ;) 
+
+## Task 1.1
+
+Create a data frame with all possible combinations (outcomes) that can result from throwing all the dice. 
+(Each row should represent one possible outcome.) 
+Print the first and last 10 rows of the data frame and state how many possible outcomes there are.
+
+Data frame with all possible combinations is created using expand.grid function which creates all the possible combinations of the outcomes.
+```{r}
+dice_seq <- seq(1:6)
+dice_throws <- data.frame(
+  expand.grid(dice1 = dice_seq, dice2 = dice_seq, dice3 = dice_seq)
+)
+```
+
+* top 10 rows
+
+```{r}
+head(dice_throws, 10)
+```
+
+* last 10 rows
+
+```{r}
+tail(dice_throws, 10)
+```
+
+* number of possible outcomes
+
+```{r}
+nrow(dice_throws)
+```
+
+## Task 1.2
+
+Create a data frame showing all possible sums that can result from throwing the three dice along with their probabilities.
+Report the results in a summary table (data frame) and a plot (visual graph). 
+
+* summary table
+
+```{r}
+dice_throws <- dice_throws %>%
+  mutate(possible_sum = dice1 + dice2 + dice3)
+
+total_sum <- nrow(dice_throws) # total number of outcomes to calculate probability
+
+dice_summary <- dice_throws %>%
+  group_by(possible_sum) %>%
+  summarise(frequency = n()) %>% # count of each sum
+  mutate(probability = frequency / total_sum) # probability of each sum
+
+data.frame(dice_summary)
+```
+
+* visualization
+
+``` {r}
+ggplot(dice_summary, aes(x = as.factor(possible_sum), y = probability)) +
+  geom_bar(stat = "identity", fill = "#697188") +
+  geom_text(aes(label = round(probability, 3)), vjust = -0.5, size = 3.5) +
+  theme_minimal() +
+  labs(
+    title = "Probability distribution of the outcomes",
+    x = "Sum of possible outcomes",
+    y = "Probability"
+  )
+```
+
+## Task 1.3
+
+Compute the probability that the sum is $\geq$ `10`, *given* that at least one of the dice shows a `3`.
+
+```{r}
+# assigning variables to avoid hardcode
+given_dice <- 3
+condition_sum <- 10
+
+given_data <- dice_throws %>%
+  filter(dice1 == given_dice | dice2 == given_dice | dice3 == given_dice)
+  
+condition_data <- given_data %>%
+  filter(possible_sum >= condition_sum)
+
+nrow(condition_data) / nrow(given_data)
+```
+
+\newpage
+
+# Task Set 2
+
+For Task 2.1-2.3, assume you toss a globe `10` times, leading to either land or water.
+
+```{r}
+n <- 10 # num of globe tosses
+```
+
+## Task 2.1
+
+Compute the probability of all possible numbers of occurrence of land, given the candidate proportion of `.5`.
+Report the results in a summary table and a plot and indicate whether the plot shows a probability distribution or a likelihood function.
+
+```{r}
+# create a data frame with all possible outcomes
+globe <- c("L", "W")
+toss_list <- replicate(n, globe, simplify = FALSE) # list of n elements with vector globe
+globe_tosses <- data.frame(
+  do.call(expand.grid, toss_list) # apply expand.grid to all the n elements
+)
+
+total_globe <- nrow(globe_tosses) # total number of outcomes to calculate probability
+
+# calculate the probabilities of land occurrence
+globe_tosses <- globe_tosses %>%
+  mutate(count_land = rowSums(globe_tosses == "L"))
+
+# calculate likelihood of each probability
+globe_summary <- globe_tosses %>%
+  group_by(count_land) %>%
+  summarise(frequency = n()) %>% # count of each probability
+  mutate(probability = frequency / total_globe) # likelihood of each probability
+
+globe_summary
+```
+
+Other way to do that is to use dbinom, but the solution above helped me to understand the underlying logic
+
+```{r}
+cp <- 0.5
+probabilities <- dbinom(0:n, size = n, prob = cp)
+globe_summary <- data.frame(count_land = 0:n, probability = probabilities)
+data.frame(globe_summary)
+```
+
+``` {r}
+ggplot(globe_summary, aes(x = as.factor(count_land), y = probability)) +
+  geom_bar(stat = "identity", fill = "#697188") +
+  geom_text(aes(label = round(probability, 3)), vjust = -0.5, size = 3.5) +
+  theme_minimal() +
+  labs(
+    title = "Probability of the outcomes",
+    x = "Num of land",
+    y = "Probability"
+  )
+```
+
+The plot shows a probability distributions of observing each count of land.
+
+## Task 2.2
+
+Assume you observe `7` water.
+Take the candidate proportions of land `cp =` `r seq(0,1,.1)`.
+For each of these candidates, compute the probability of observing `7` water. 
+Report the results in a summary table and a plot and indicate whether the plot shows a probability distribution or a likelihood function.
+
+```{r}
+cp_land <- seq(0, 1, .1)
+cp_water <- 1 - cp_land
+water <- 7 # number of water observed
+
+# probability of observing 7 water for each candidate
+prob_water <- dbinom(water, size = n, prob = cp_water)
+water_summary <- data.frame(cp_land = cp_land, prob_water = prob_water) %>%
+  arrange(cp_land)
+
+water_summary
+```
+
+```{r}
+ggplot(water_summary, aes(x = as.factor(cp_land), y = prob_water)) +
+  geom_bar(stat = "identity", fill = "#697188") +
+  geom_text(aes(label = round(prob_water, 3)), vjust = -0.5, size = 3.5) +
+  theme_minimal() +
+  labs(
+    title = "Likelihood of observing 7 Water",
+    x = "Candidate proportion of land",
+    y = "Likelihood"
+  )
+```
+
+This plot shows a likelihood function of observing 7 water for each candidate proportion of land.
+
+## Task 2.3
+
+For each candidate proportion of land, compute the probability of all possible number of occurrences of land.
+Report the results in a summary table, showing the probability distributions as columns and the likelihood functions as rows.
+
+```{r}
+cp_land <- seq(0, 1, .1) # repeat not to search above
+
+probabilities_all <- data.frame(matrix(ncol = length(cp_land), nrow = 0)) # create empty df
+for (i in 1:n) {
+  probabilities_all <- rbind(probabilities_all, dbinom(0:n, size = n, prob = cp_land[i]))
+}
+colnames(probabilities_all) <- c(cp_land)
+probabilities_all
+```
