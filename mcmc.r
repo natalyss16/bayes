@@ -1,4 +1,4 @@
-#library(rethinking)
+library(rethinking)
 library(ggplot2)
 
 # King Markov travel
