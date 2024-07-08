@@ -1,0 +1,257 @@
+---
+title: "Assignment 4"
+author: "Natali Tckvitishvili"
+date: "`r Sys.Date()`"
+output: pdf_document
+execute: 
+  cache: true
+---
+
+```{r packages, warning=FALSE, message=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(rethinking)
+library(scales)
+```
+
+
+```{r data}
+heart <- read.csv("heart.csv")
+head(heart)
+summary(heart)
+```
+
+
+# Task Set 1
+
+
+## Task 1.1
+
+Run a Bayesian logistic regression model to estimate the risk of men and women to develop a coronary heart disease (TenYearCHD). 
+Provide a summary of the posterior distributions.  
+What is the average probability of men and women to develop the disease? 
+
+```{r m1, warning=FALSE, message=FALSE, output=FALSE}
+#| echo: true
+#| eval: true
+#| output: false
+
+# gender: 1 is female, 2 is male
+
+heart_list <- list(
+  n = nrow(heart),
+  gender = heart$male + 1, # re-index as ulam doesn't work with 0
+  CHD = heart$TenYearCHD,
+  diabetes = heart$diabetes + 1, # for task 2
+  age = heart$age,
+  avg_age = mean(heart$age)
+#  age_women = heart$age[heart$male == 0], # for task 3
+#  age_men = heart$age[heart$male == 1]
+)
+
+disease_gender <- ulam(
+  alist(
+    CHD ~ dbinom(n, p), # binomial distribution - success or not
+    logit(p) <- a[gender],
+    a[gender] ~ dnorm(0, 1)
+  ), data = heart_list, chains = 4, cores = 4
+)
+```
+
+```{r}
+traceplot(disease_gender) # looks stable
+precis(disease_gender, depth = 2)
+inv_logit(coef(disease_gender))
+```
+
+Average probabilities to develop the disease for:
+* women (gender = 1) ~ 0.003%
+* men (gender = 2) ~ 0.005%
+
+# Task 1.2
+
+For the model of `Task 1.1`, visualize the posterior distribution of gender-differences to assess the credibility of the gender difference.
+
+```{r 1.2}
+set.seed(1111)
+disease_gender_samples <- extract.samples(disease_gender)
+posterior <-  tibble(p_female = inv_logit(disease_gender_samples$a[, 1]),
+                     p_male = inv_logit(disease_gender_samples$a[, 2]),
+                     diff = p_male - p_female)
+
+ggplot(posterior, aes(diff)) + 
+  geom_density(color = "#5fc5d5", linewidth = 2) +
+   # converting to % scale for easier reading
+  scale_x_continuous(labels = percent_format(accuracy = 0.0001)) +
+  labs(x = "Disease probability male vs female",
+       y = "Density")
+```
+
+Most of the probability mass is concentrated between 0.001% and 0.002% difference, therefore, we can assume that there is a high probability that genders differ in chances of developing a coronary heart disease. 
+But there might be other confounders, for example, men in general smoke more than women, I suppose smoking increases the risk of heart disease more than just being a man
+
+\newpage
+
+# Task Set 2
+
+## Task 2.1 
+
+Run a Bayesian logistic regression model to estimate the risk of men and women with and without diabetes to develop a coronary heart disease (TenYearCHD). 
+Provide a summary of the posterior distributions. 
+Does the effect of diabetes differ between men and women?
+
+```{r m2}
+#| echo: true
+#| eval: true
+#| output: false
+
+# diabetes: 1 without, 2 with
+
+disease_diabetes <- ulam(
+  alist(
+    CHD ~ dbinom(n, p), # binomial distribution - success or not
+    logit(p) <- a[gender, diabetes],
+    matrix[gender, diabetes]:a ~ dnorm(0, 1)
+  ), data = heart_list, chains = 4, cores = 4
+)
+```
+
+```{r 2.1}
+traceplot(disease_diabetes) # looks stable
+precis(disease_diabetes, depth = 3)
+
+# renaming columns to make analysis easier
+coef_diabetes <- inv_logit(coef(disease_diabetes))
+names(coef_diabetes) <- c("female_without", "male_without", "female_with", "male_with")
+coef_diabetes
+```
+
+Among people who have diabetes the difference is not as big as among those who do not have it:
+* women with diabetes: ~ 0.011%
+* men with diabetes: ~ 0.014%
+
+* women without diabetes: ~ 0.0029%
+* men without diabetes: ~ 0.0044%
+
+# Task 2.2
+
+For the model of `Task 2.1`, visualize the posterior distributions of each group in one plot to better assess the credibility of the group differences. 
+
+```{r 2.2}
+set.seed(1111)
+disease_diabetes_samples <- data.frame(extract.samples(disease_diabetes))
+names(disease_diabetes_samples) <- c("female_without", "male_without", "female_with", "male_with")
+
+posterior_diabetes <-  data.frame(
+  female_without = inv_logit(disease_diabetes_samples$female_without),
+  male_without = inv_logit(disease_diabetes_samples$male_without),
+  female_with = inv_logit(disease_diabetes_samples$female_with),
+  male_with = inv_logit(disease_diabetes_samples$male_with)
+  ) %>%
+  pivot_longer(cols = female_without:male_with, names_to = "Type", values_to = "Probability")
+
+ggplot(posterior_diabetes, aes(Probability, color = Type)) +
+  geom_density(alpha = .3, linewidth = 2) +
+  scale_x_continuous(labels = percent_format(accuracy = 0.0001)) +
+  labs(x = "Probability",
+       y = "Density",
+       title = "Probability of developing CHD with and without diabetes"
+       )
+```
+
+According to the graph, men are under higher risk than women to develop coronary heart disease both with and without diabetes
+Besides, both genders with diabetes have significantly higher chances to develop CHD than those without.
+
+\newpage
+
+# Task Set 3
+
+## Task 3.1 
+
+Run a Bayesian logistic regression model to estimate the effect of age on the risk of developing a coronary heart disease (TenYearCHD), separately for women and men. 
+Ensure that the regression intercept represents the risk of women and men with average age.
+Provide a summary of the posterior distributions. 
+
+```{r m, warning=FALSE, message=FALSE}
+#| echo: true
+#| eval: true
+#| output: false
+women_list <- list(
+  n = nrow(heart[heart$male == 0, ]),
+  CHD = heart$TenYearCHD[heart$male == 0],
+  age_women = heart$age[heart$male == 0],
+  avg_age_women = mean(heart$age[heart$male == 0])
+)
+
+disease_age_women <- ulam(
+  alist(
+    CHD ~ dbinom(n, p),
+    logit(p) <- a_1 + b_1 * (age_women - avg_age_women), # standardizing around the mean
+    a_1 ~ dnorm(10, 5),
+    b_1 ~ dnorm(1, 0.1)
+  ), data = women_list, chains = 4, cores = 4
+)
+```
+
+```{r 3.1}
+traceplot(disease_age_women)
+precis(disease_age_women, depth = 2)
+inv_logit(coef(disease_age_women))
+```
+
+```{r m4, warning=FALSE, message=FALSE}
+#| echo: true
+#| eval: true
+#| output: false
+men_list <- list(
+  n = nrow(heart[heart$male == 1, ]),
+  CHD = heart$TenYearCHD[heart$male == 1],
+  age_men = heart$age[heart$male == 1],
+  avg_age_men = mean(heart$age[heart$male == 1])
+)
+
+disease_age_men <- ulam(
+  alist(
+    CHD ~ dbinom(n, p),
+    logit(p) <- a_1 + b_1 * (age_men - avg_age_men), # standardizing around the mean
+    a_1 ~ dnorm(10, 5),
+    b_1 ~ dnorm(1, 0.1)
+  ), data = men_list, chains = 4, cores = 4
+)
+```
+
+```{r m4.1}
+traceplot(disease_age_men)
+precis(disease_age_men, depth = 2)
+inv_logit(coef(disease_age_men))
+```
+## Task 3.2 
+
+For the model of `Task 3.1`, visualize the posterior distribution of differences in the age effect between women and men. 
+Does age increase the risk of developing the disease and does this effect differ between women and men? 
+
+```{r 3.2}
+set.seed(1111)
+women_age_samples <- data.frame(extract.samples(disease_age_women))
+head(women_age_samples)
+
+men_age_samples <- data.frame(extract.samples(disease_age_men))
+head(men_age_samples)
+
+posterior_age <- data.frame(
+  female = women_age_samples$b_1,
+  male = men_age_samples$b_1
+  ) %>%
+  pivot_longer(cols = female:male, names_to = "Gender", values_to = "Coef")
+
+ggplot(posterior_age, aes(Coef, color = Gender)) +
+  geom_density(alpha = .3, linewidth = 2) +
+  scale_x_continuous(labels = percent_format(accuracy = 0.01)) +
+  labs(x = "Probability",
+       y = "Density",
+       title = "Increase in chances of getting CHD with increasing age"
+       )
+```
+
+With increasing age, women tend to have higher risk of developing CHD than men
+That, honestly, doesn't sound right, but I don't know how to change the model :(
