@@ -1,0 +1,171 @@
+---
+title: "Assignment 5"
+author: "Natali Tckvitishvili"
+date: "`r Sys.Date()`"
+output: pdf_document
+execute: 
+  cache: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r packages, warning=FALSE, message=FALSE}
+library(rethinking)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+```
+
+# Task Set 1
+
+Load the data set `RiskyChoice.csv` to solve the Task Set 1. Use the `read_csv2()` function instead of `read_csv()`. 
+
+```{r data}
+risk <- read.csv2("/Users/nataly/Management & Technology/Introduction to Bayesian Data Analysis/bayes/bayes/data/RiskyChoice.csv")
+head(risk)
+summary(risk)
+```
+
+
+## Task 1.1
+
+Create a reduced data table with only one row per subject that shows the number of solved choices problems (`nChoice`) and the number of correct choices (`nCorrect`) for each subject along with the other variables. 
+Remove the subjects with missing values. 
+Print the data of the first 10 subjects.
+
+```{r}
+risk_cut <- risk %>%
+  na.omit() %>%
+  group_by(Subject) %>%
+  summarise(
+    nChoice = n(),
+    nCorrect = sum(CorrectChoice),
+    ageGroup = max(AgeGroup), # they're all the same, so we can take max
+    gender = max(Gender),
+    numeracy = max(Numeracy))
+
+print(risk_cut, n = 10)
+```
+
+## Task 1.2 
+
+Run a Bayesian regression model that predicts `nCorrect` from `Numeracy` using fixed intercepts and fixed slopes.
+Standardize the predictor before running the model and compute the WAIC of the model.
+
+```{r}
+# make a list
+risk_cut_list <- list(
+  nCorrect = risk_cut$nCorrect,
+  numeracy_s = scale(risk_cut$numeracy),
+  subject = as.integer(as.factor(risk_cut$Subject))
+)
+
+# plotting to understand the distribution
+ggplot(risk_cut, aes(numeracy)) +
+  geom_density(color = "#5fc5d5", linewidth = 2)
+
+ggplot(risk_cut, aes(nCorrect)) +
+  geom_density(color = "#ca81cb", linewidth = 2)
+```
+
+```{r m1, warning=FALSE, message=FALSE, output=FALSE}
+#| echo: true
+#| eval: true
+#| output: false
+
+numeracy_model <- ulam(
+  alist(
+    nCorrect ~ dnorm(mu, sigma),
+    mu <- a + b * numeracy_s,
+    a ~ dnorm(0, 0.6),
+    b ~ dnorm(0, 0.5),
+    sigma ~ dnorm(0, 1)
+  ), data = risk_cut_list, chains = 4, cores = 4, log_lik = TRUE
+)
+```
+
+```{r}
+precis(numeracy_model, depth = 2)
+WAIC(numeracy_model)
+```
+
+## Task 1.3 
+
+Run a Bayesian regression model that predicts `nCorrect` from `Numeracy` using random intercepts and fixed slopes.
+Standardize the predictor before running the model and compute the WAIC of the model.
+
+```{r m2, warning=FALSE, message=FALSE, output=FALSE}
+#| echo: true
+#| eval: true
+#| output: false
+
+numeracy_model_subject <- ulam(
+  alist(
+    nCorrect ~ dnorm(mu, sigma),
+    mu <- a[subject] + b * numeracy_s,
+    a[subject] ~ dnorm(a_bar, tau_a),
+    a_bar ~ dnorm(0, 0.6),
+    tau_a ~ dnorm(0, 1),
+    b ~ dnorm(1, 0.6),
+    sigma ~ dexp(2)
+  ), data = risk_cut_list, chains = 4, cores = 4, log_lik = TRUE
+)
+```
+
+```{r}
+precis(numeracy_model_subject, depth = 2)
+WAIC(numeracy_model_subject)
+compare(numeracy_model, numeracy_model_subject)
+```
+
+Looks like if we consider each subject as a group, our model gets better
+
+\newpage
+
+# Task Set 2
+
+## Task 2.1 
+
+Create a data table that entails 10,000 posterior samples (rows) for each subject-specific (columns) intercept. 
+Convert the sampled values into probabilities and print the first 10 samples of the first 10 subjects.
+
+```{r}
+set.seed(22394)
+subject_samples <- extract.samples(numeracy_model_subject, n=10000)$a
+probabilities <- as.data.frame(1 / (1 + exp(-subject_samples)))
+print(probabilities[1:10, 1:10])
+```
+
+## Task 2.2
+
+Use the posterior samples to plot the posterior distribution of all subject-specific intercepts to show the variability in the performance among subjects. 
+Use the converted values (probabilities). 
+
+```{r}
+probabilities_long <- probabilities %>%
+  pivot_longer(cols = everything(), names_to = "subject", values_to = "probability")
+
+ggplot(probabilities_long, aes(x = probability, color = subject)) +
+  geom_density(alpha = 0.5) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(title = "Supject-specific intercepts",
+       x = "Probability",
+       y = "Density")
+```
+
+Most of the intercepts follow the similar distribution, however, looks like some subjects are different from the others
+
+## Task 2.3 
+
+Consider the following posterior summaries and traceplots. 
+Which model was estimated and what might be the cause of the convergence problems?
+
+```{r}
+# precis(m3)
+# traceplot_ulam(m3, pars = c("mu_a", "tau_a", "mu_b", "tau_b"))
+```
+
+The model with random intercepts and slopes was estimated.
+Maybe too complicated model was estimated and it would be enough to have either random intercept or random slope model
+Other cause could be incorrect specification of the priors for those coefficients
